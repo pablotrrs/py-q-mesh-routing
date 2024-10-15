@@ -1,5 +1,9 @@
 import numpy as np
 import random
+import json
+import os
+
+os.makedirs('logs', exist_ok=True)
 
 # Hyperparameters
 INITIAL_EPSILON = 1.0
@@ -9,6 +13,7 @@ epsilon = INITIAL_EPSILON
 ALPHA = 0.5
 GAMMA = 0.9
 GRID_SIZE = 6
+
 # Define the 6x6 grid topology with 36 intermediary nodes
 nodes = ['tx'] + [f'i{n}' for n in range(GRID_SIZE * GRID_SIZE)] + ['rx']
 
@@ -27,29 +32,47 @@ def generate_neighbors(GRID_SIZE):
             neighbors[current_node] = []
             
             # Add neighbor to the left (if not on the left edge)
-            if j > 0 and idx != 25 and idx != 27 and idx != 29 and idx != 3 and idx != 9 and idx != 15:
+            if j > 0 and idx not in [3, 9, 15, 25, 27, 29]:
                 neighbors[current_node].append(f'i{idx - 1}')
             
             # Add neighbor to the right (if not on the right edge)
-            if j < GRID_SIZE - 1 and idx != 2 and idx != 8 and idx != 14 and idx != 24 and idx != 26 and idx != 28:
+            if j < GRID_SIZE - 1 and idx not in [2, 8, 14, 24, 26, 28]:
                 neighbors[current_node].append(f'i{idx + 1}')
                 
             # Add neighbor above (if not on the top row)
-            if i > 0 and idx != 31 and idx != 32 and idx != 33 and idx != 34:
+            if i > 0 and idx not in [31, 32, 33, 34]:
                 neighbors[current_node].append(f'i{idx - GRID_SIZE}')
             
             # Add neighbor below (if not on the bottom row)
-            if i < GRID_SIZE - 1 and idx != 25 and idx != 26 and idx != 27 and idx != 28:
+            if i < GRID_SIZE - 1 and idx not in [25, 26, 27, 28]:
                 neighbors[current_node].append(f'i{idx + GRID_SIZE}')
 
     neighbors[f'i{GRID_SIZE * GRID_SIZE - 1}'].append('rx')
+    
     return neighbors
 
 # Generate neighbors dynamically
 neighbors = generate_neighbors(GRID_SIZE)
 
 # Initialize Q-tables, processing times, and node lifetimes
-q_table = {node: {dest: np.random.rand(len(nodes)) for dest in nodes} for node in nodes}
+def initialize_q_table():
+    q_table = {}
+    for node in nodes:
+        q_table[node] = {}
+        for dest in nodes:
+            if dest in neighbors[node]:
+                q_table[node][dest] = np.random.rand()
+            else:
+                q_table[node][dest] = 0
+    return q_table
+
+# q_table = {node: {dest: [np.random.rand() if dest in neighbors[node] else 0 for dest in nodes] for dest in nodes} for node in nodes}
+q_table = initialize_q_table()
+
+# Save the Q-table to a JSON file in the 'logs' directory
+with open('logs/q_table.json', 'w') as f:
+    json.dump(q_table, f, indent=4)
+
 processing_time = {node: random.randint(1, 5) for node in nodes}
 node_lifetime = {node: random.randint(5, 20) for node in nodes if node not in ['tx', 'rx']}
 node_reconnect_time = {node: random.randint(5, 20) for node in nodes if node not in ['tx', 'rx']}
@@ -107,10 +130,18 @@ def select_next_node(q_values, available_nodes):
 
 def update_q_value(current_node, next_node, destination, reward):
     """Updates the Q-value for the current state-action pair."""
-    current_q = q_table[current_node][destination][nodes.index(next_node)]
-    max_next_q = max(q_table[next_node][destination])
-    new_q = (1 - ALPHA) * current_q + ALPHA * (reward + GAMMA * max_next_q)
-    q_table[current_node][destination][nodes.index(next_node)] = new_q
+    with open('logs/q_value_updates.log', 'a') as log_file:
+        log_file.write(f"Updating Q-value for transition: {current_node} -> {next_node} -> {destination} with reward {reward}.\n")
+        current_q = q_table[current_node][destination]
+        log_file.write(f"Current Q-value: {current_q}\n")
+        max_next_q = max(q_table[next_node].values())
+        log_file.write(f"Next node Q-values: {list(q_table[next_node].values())}\n")
+        log_file.write(f"Max Q-value for next node: {max_next_q}\n")
+        new_q = (1 - ALPHA) * current_q + ALPHA * (reward + GAMMA * max_next_q)
+        log_file.write(f"Updated Q-value: {new_q}\n")
+        q_table[current_node][destination] = new_q
+        log_file.write(f"New Q-value in Q-table: {q_table[current_node][destination]}\n")
+        log_file.write(f"---------------------------------------------------------------\n")
 
 def send_packet(tx, rx):
     """Simulates the packet routing process and returns the path, hops, time, and processed functions."""
