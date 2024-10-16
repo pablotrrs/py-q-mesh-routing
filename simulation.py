@@ -124,8 +124,8 @@ def select_next_node(q_values, available_nodes):
         return random.choice(available_nodes)  # Explore: random choice
     else:
         # Exploit: choose the node with the highest Q-value
-        max_q_value = max(q_values[nodes.index(n)] for n in available_nodes)
-        best_nodes = [n for n in available_nodes if q_values[nodes.index(n)] == max_q_value]
+        max_q_value = max(q_values[n] for n in available_nodes)
+        best_nodes = [n for n in available_nodes if q_values[n] == max_q_value]
         return random.choice(best_nodes)  # If multiple best nodes, choose randomly
 
 def update_q_value(current_node, next_node, destination, reward):
@@ -142,6 +142,9 @@ def update_q_value(current_node, next_node, destination, reward):
         q_table[current_node][destination] = new_q
         log_file.write(f"New Q-value in Q-table: {q_table[current_node][destination]}\n")
         log_file.write(f"---------------------------------------------------------------\n")
+
+    with open('logs/q_table.json', 'w') as f:
+        json.dump(q_table, f, indent=4)
 
 def send_packet(tx, rx):
     """Simulates the packet routing process and returns the path, hops, time, and processed functions."""
@@ -161,7 +164,7 @@ def send_packet(tx, rx):
             return path, total_hops, total_time, processed_functions
 
         available_nodes = [n for n in neighbors[current_node] if node_status.get(n, True)]
-        next_node = select_next_node(q_table[current_node][rx], available_nodes)
+        next_node = select_next_node(q_table[current_node], available_nodes)
 
         if next_node is None:
             print(f"Node {current_node} cannot send the packet, no available nodes.")
